@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Document Layout Tool</title>
+    <!-- Library to read image orientation data -->
+    <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
+    <!-- Libraries to generate PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #6366f1;
+            --primary-hover: #5b5df3;
+            --secondary-color: #10b981;
+            --accent-color: #f59e0b;
+            --text-dark: #1f2937;
+            --text-light: #6b7280;
+            --background-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --card-background: rgba(255, 255, 255, 0.95);
+            --border-color: #e5e7eb;
+            --danger-color: #ef4444;
+            --danger-hover: #dc2626;
+            --success-color: #10b981;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.6;
+            color: var(--text-dark);
+            background: var(--background-gradient);
+            min-height: 100vh;
+            padding: 2rem;
+            overflow-x: hidden;
+        }
+
+        /* Animated background particles */
+        .background-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .particle {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.7; }
+            50% { transform: translateY(-20px) rotate(180deg); opacity: 1; }
+        }
+
+        /* Header with animated title */
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            animation: slideInDown 0.8s ease-out;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        .header p {
+            color: var(--text-light);
+            font-size: 1.2rem;
+            font-weight: 300;
+        }
+
+        @keyframes glow {
+            from { filter: drop-shadow(0 0 5px rgba(102, 126, 234, 0.3)); }
+            to { filter: drop-shadow(0 0 20px rgba(102, 126, 234, 0.6)); }
+        }
+
+        @keyframes slideInDown {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        /* Main layout with staggered animations */
+        .main-container {
+            display: flex;
+            gap: 3rem;
+            max-width: 1800px;
+            margin: 0 auto;
+            align-items: flex-start;
+        }
+        
+        .controls-column {
+            flex: 0 0 900px;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            animation: slideInLeft 0.8s ease-out 0.2s both;
+        }
+
+        .preview-column {
+            flex: 1;
+            position: sticky;
+            top: 2rem;
+            animation: slideInRight 0.8s ease-out 0.4s both;
+        }
+
+        @keyframes slideInLeft {
+            from { transform: translateX(-50px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes slideInRight {
+            from { transform: translateX(50px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        .card {
+            background: var(--card-background);
+            backdrop-filter: blur(20px);
+            padding: 2.5rem;
+            border-radius: 20px;
+            box-shadow: var(--shadow-xl);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color), var(--accent-color));
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        .layout-selector-bar {
+            padding-bottom: 2rem;
+            border-bottom: 2px solid var(--border-color);
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            animation: fadeInUp 0.6s ease-out 0.6s both;
+        }
+
+        .layout-selector-bar label {
+            font-weight: 600;
+            color: var(--text-dark);
+            font-size: 1.1rem;
+        }
+        
+        #layout-selector {
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            border: 2px solid var(--border-color);
+            font-size: 1rem;
+            font-weight: 500;
+            background: white;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            outline: none;
+        }
+
+        #layout-selector:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        @keyframes fadeInUp {
+            from { transform: translateY(30px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        h2 { 
+            text-align: center; 
+            color: var(--text-dark);
+            font-weight: 700;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            position: relative;
+        }
+
+        h2::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50px;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            border-radius: 2px;
+        }
+        
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .image-upload-section {
+            border: 2px dashed var(--border-color);
+            padding: 2rem;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .image-upload-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .image-upload-section:hover::before {
+            left: 100%;
+        }
+
+        .image-upload-section:hover {
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        input[type="file"] {
+            width: 100%; 
+            padding: 12px 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 12px; 
+            box-sizing: border-box;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: white;
+            cursor: pointer;
+        }
+
+        input[type="file"]:hover {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .edit-controls {
+            margin-top: 2rem;
+            display: none;
+            flex-direction: column;
+            gap: 1.5rem;
+            flex-grow: 1;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.4s ease;
+        }
+
+        .edit-controls.active { 
+            display: flex; 
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .btn-stack {
+             margin-top: auto;
+             padding-top: 1.5rem;
+             display: flex;
+             flex-direction: column;
+             gap: 0.75rem;
+        }
+
+        .control-group { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 0.5rem;
+        }
+
+        .control-group label {
+            font-weight: 600;
+            color: var(--text-dark);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .control-group label span {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            min-width: 50px;
+            text-align: center;
+        }
+
+        input[type="range"] { 
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: var(--border-color);
+            outline: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow-md);
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 0 8px rgba(99, 102, 241, 0.2);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow-md);
+        }
+        
+        .rotate-buttons { 
+            display: flex; 
+            gap: 1rem; 
+            justify-content: center; 
+        }
+
+        .rotate-btn {
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center;
+            background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+            border: 2px solid var(--border-color); 
+            border-radius: 12px;
+            cursor: pointer; 
+            padding: 1rem; 
+            flex-grow: 1; 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .rotate-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .rotate-btn:hover::before {
+            opacity: 0.1;
+        }
+
+        .rotate-btn:hover { 
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .rotate-btn:active {
+            transform: translateY(0) scale(0.98);
+        }
+
+        .rotate-btn .arrow { 
+            font-size: 2rem; 
+            font-weight: bold; 
+            line-height: 1;
+            position: relative;
+            z-index: 1;
+            transition: transform 0.3s ease;
+        }
+
+        .rotate-btn:hover .arrow {
+            transform: scale(1.1);
+        }
+
+        .rotate-btn span:last-child { 
+            font-size: 0.875rem; 
+            margin-top: 6px;
+            font-weight: 600;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .reset-btn, .remove-btn {
+            padding: 0.75rem 1.5rem; 
+            border: none;
+            border-radius: 12px; 
+            cursor: pointer; 
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .reset-btn { 
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            color: white;
+        }
+
+        .reset-btn:hover { 
+            background: linear-gradient(135deg, #4b5563, #374151);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .remove-btn { 
+            background: linear-gradient(135deg, var(--danger-color), var(--danger-hover));
+            color: white; 
+            display: none;
+        }
+
+        .remove-btn:hover { 
+            background: linear-gradient(135deg, var(--danger-hover), #b91c1c);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        #download-btn {
+            width: 100%; 
+            padding: 1rem 2rem; 
+            font-size: 1.2rem; 
+            font-weight: 700;
+            color: white; 
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+            border: none; 
+            border-radius: 16px; 
+            cursor: pointer; 
+            margin-top: 2rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #download-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s ease;
+        }
+
+        #download-btn:hover::before {
+            left: 100%;
+        }
+
+        #download-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.4);
+        }
+
+        #download-btn:active {
+            transform: translateY(-1px);
+        }
+
+        #download-btn:disabled { 
+            background: linear-gradient(135deg, #d1d5db, #9ca3af);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        #download-btn:disabled::before {
+            display: none;
+        }
+        
+        /* Enhanced preview styles */
+        .preview-wrapper {
+            background: var(--card-background);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: var(--shadow-xl);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .preview-wrapper:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        .a4-container-wrapper {
+            width: 100%;
+            aspect-ratio: 210 / 297;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .a4-container {
+            width: 210mm; 
+            height: 297mm;
+            padding: 15mm;
+            box-sizing: border-box; 
+            background: white; 
+            display: flex;
+            flex-direction: column; 
+            justify-content: flex-start; 
+            align-items: center;
+            transform: scale(calc(100% / 210mm));
+            transform-origin: top left;
+            transition: all 0.3s ease;
+        }
+
+        .image-container { 
+            display: flex; 
+            align-items: center; 
+            width: 100%; 
+            height: 100%; 
+        }
+
+        .image-preview { 
+            border: 2px dashed #e5e7eb; 
+            background: linear-gradient(135deg, #f9fafb, #f3f4f6);
+            transition: all 0.3s ease;
+            border-radius: 8px;
+        }
+
+        .image-preview[src]:not([src=""]) {
+            border: none;
+            box-shadow: var(--shadow-md);
+        }
+
+        .layout-id-card .image-container { 
+            flex-direction: column; 
+            justify-content: flex-start; 
+            gap: 15mm; 
+        }
+
+        .layout-id-card .image-preview { 
+            width: 113.5mm; 
+            height: 71.3mm; 
+            object-fit: cover; 
+        }
+        
+        .layout-aadhar .image-container { 
+            flex-direction: row; 
+            justify-content: center; 
+            align-items: flex-start; 
+            gap: 10mm; 
+        }
+
+        .layout-aadhar .image-preview { 
+            width: 85mm; 
+            height: 229mm; 
+            object-fit: cover; 
+        }
+        
+        .layout-a4 .image-container { 
+            justify-content: center; 
+        }
+
+        .layout-a4 .image-preview { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: contain; 
+        }
+
+        /* Loading animation */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Success animation */
+        @keyframes bounce {
+            0%, 20%, 53%, 80%, 100% { transform: translate3d(0,0,0); }
+            40%, 43% { transform: translate3d(0, -30px, 0); }
+            70% { transform: translate3d(0, -15px, 0); }
+            90% { transform: translate3d(0, -4px, 0); }
+        }
+
+        .success-animation {
+            animation: bounce 1s ease-in-out;
+        }
+        
+        /* Responsive design */
+        @media (max-width: 1400px) {
+            .main-container { flex-direction: column; gap: 2rem; }
+            .controls-column { flex-basis: auto; max-width: 100%; }
+            .preview-column { position: static; }
+        }
+
+        @media (max-width: 768px) {
+            body { padding: 1rem; }
+            .controls-grid { grid-template-columns: 1fr; }
+            .header h1 { font-size: 2rem; }
+            .card { padding: 1.5rem; }
+            .main-container { gap: 1.5rem; }
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--primary-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-hover);
+        }
+    </style>
+</head>
+<body>
+    <!-- Animated background -->
+    <div class="background-animation" id="bg-animation"></div>
+
+    <!-- Header -->
+    <div class="header">
+        <h1>Universal Document Layout Tool</h1>
+        <p>Create professional document layouts with ease</p>
+    </div>
+
+    <div class="main-container">
+        <div class="controls-column">
+            <div class="card">
+                <div class="layout-selector-bar">
+                    <label for="layout-selector">📋 Select Layout Template:</label>
+                    <select id="layout-selector">
+                        <option value="id-card" selected>🆔 Identity Card</option>
+                        <option value="aadhar">🏛️ Aadhar Card</option>
+                        <option value="a4">📄 A4 Size</option>
+                    </select>
+                </div>
+            
+                <div class="controls-grid">
+                    <div class="image-upload-section" id="front-image-section">
+                        <h2 id="front-image-label">📸 Front Side</h2>
+                        <input type="file" id="front-image" accept="image/*">
+                        <div class="edit-controls" id="controls-front">
+                            <div class="control-group">
+                                <label for="brightness-front">☀️ Brightness: <span id="brightness-val-front">100</span>%</label>
+                                <input type="range" id="brightness-front" min="0" max="200" value="100">
+                            </div>
+                            <div class="control-group">
+                                <label for="clarity-front">🔍 Contrast: <span id="clarity-val-front">100</span>%</label>
+                                <input type="range" id="clarity-front" min="0" max="200" value="100">
+                            </div>
+                            <div class="control-group">
+                                <label>🔄 Rotate</label>
+                                <div class="rotate-buttons">
+                                    <button class="rotate-btn" id="rotate-left-front" title="Rotate 90° Left">
+                                        <span class="arrow">↺</span>
+                                        <span>Left</span>
+                                    </button>
+                                    <button class="rotate-btn" id="rotate-right-front" title="Rotate 90° Right">
+                                        <span class="arrow">↻</span>
+                                        <span>Right</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="btn-stack">
+                               <button class="reset-btn" id="reset-front">🔄 Reset Edits</button>
+                               <button class="remove-btn" id="remove-front">🗑️ Remove Image</button>
+                            </div>
+                        </div>
+                    </div>
+            
+                    <div class="image-upload-section" id="back-image-section">
+                        <h2 id="back-image-label">📸 Back Side</h2>
+                        <input type="file" id="back-image" accept="image/*">
+                        <div class="edit-controls" id="controls-back">
+                            <div class="control-group">
+                                <label for="brightness-back">☀️ Brightness: <span id="brightness-val-back">100</span>%</label>
+                                <input type="range" id="brightness-back" min="0" max="200" value="100">
+                            </div>
+                            <div class="control-group">
+                                <label for="clarity-back">🔍 Contrast: <span id="clarity-val-back">100</span>%</label>
+                                <input type="range" id="clarity-back" min="0" max="200" value="100">
+                            </div>
+                            <div class="control-group">
+                                <label>🔄 Rotate</label>
+                                <div class="rotate-buttons">
+                                    <button class="rotate-btn" id="rotate-left-back" title="Rotate 90° Left">
+                                        <span class="arrow">↺</span>
+                                        <span>Left</span>
+                                    </button>
+                                    <button class="rotate-btn" id="rotate-right-back" title="Rotate 90° Right">
+                                        <span class="arrow">↻</span>
+                                        <span>Right</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="btn-stack">
+                                <button class="reset-btn" id="reset-back">🔄 Reset Edits</button>
+                                <button class="remove-btn" id="remove-back">🗑️ Remove Image</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button id="download-btn" disabled>📤 Upload Image to Continue</button>
+            </div>
+        </div>
+        
+        <div class="preview-column">
+            <div class="preview-wrapper">
+                <div class="a4-container-wrapper">
+                    <div class="a4-container layout-id-card" id="a4-layout">
+                        <div class="image-container">
+                            <img id="preview-front" class="image-preview" src="" alt="Image 1 preview" style="display: none;">
+                            <img id="preview-back" class="image-preview" src="" alt="Image 2 preview" style="display: none;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // Create animated background particles
+    function createBackgroundAnimation() {
+        const bgAnimation = document.getElementById('bg-animation');
+        const particleCount = 15;
+        
+        for (let i = 0; i < particleCount; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.top = Math.random() * 100 + '%';
+            particle.style.width = (Math.random() * 4 + 2) + 'px';
+            particle.style.height = particle.style.width;
+            particle.style.animationDelay = Math.random() * 6 + 's';
+            particle.style.animationDuration = (Math.random() * 3 + 4) + 's';
+            bgAnimation.appendChild(particle);
+        }
+    }
+
+    // DOM Elements
+    const layoutSelector = document.getElementById('layout-selector');
+    const a4LayoutContainer = document.getElementById('a4-layout');
+    const frontImageInput = document.getElementById('front-image');
+    const backImageInput = document.getElementById('back-image');
+    const previewFront = document.getElementById('preview-front');
+    const previewBack = document.getElementById('preview-back');
+    const downloadBtn = document.getElementById('download-btn');
+    const backImageSection = document.getElementById('back-image-section');
+    const frontImageLabel = document.getElementById('front-image-label');
+
+    // State Management
+    const defaultState = { brightness: 100, clarity: 100, rotate: 0 };
+    let frontState = { ...defaultState };
+    let backState = { ...defaultState };
+    let loadedImages = { front: false, back: false };
+    let originalImageData = { front: null, back: null };
+
+    // Control Elements
+    const controls = {
+        front: { 
+            panel: document.getElementById('controls-front'), 
+            brightness: document.getElementById('brightness-front'), 
+            clarity: document.getElementById('clarity-front'), 
+            rotateLeft: document.getElementById('rotate-left-front'), 
+            rotateRight: document.getElementById('rotate-right-front'), 
+            reset: document.getElementById('reset-front'), 
+            removeBtn: document.getElementById('remove-front'), 
+            brightnessVal: document.getElementById('brightness-val-front'), 
+            clarityVal: document.getElementById('clarity-val-front') 
+        },
+        back: { 
+            panel: document.getElementById('controls-back'), 
+            brightness: document.getElementById('brightness-back'), 
+            clarity: document.getElementById('clarity-back'), 
+            rotateLeft: document.getElementById('rotate-left-back'), 
+            rotateRight: document.getElementById('rotate-right-back'), 
+            reset: document.getElementById('reset-back'), 
+            removeBtn: document.getElementById('remove-back'), 
+            brightnessVal: document.getElementById('brightness-val-back'), 
+            clarityVal: document.getElementById('clarity-val-back') 
+        }
+    };
+
+    // --- Functions ---
+    function handleLayoutChange() {
+        const selectedLayout = layoutSelector.value;
+        a4LayoutContainer.className = 'a4-container';
+        a4LayoutContainer.classList.add(`layout-${selectedLayout}`);
+        const isA4Layout = selectedLayout === 'a4';
+        
+        backImageSection.style.display = isA4Layout ? 'none' : 'block';
+        previewBack.style.display = (!isA4Layout && loadedImages.back) ? 'block' : 'none';
+        
+        // Update labels with emojis
+        if (isA4Layout) {
+            frontImageLabel.innerHTML = '📄 A4 Page Image';
+        } else {
+            frontImageLabel.innerHTML = '📸 Front Side';
+        }
+        
+        checkAllImagesLoaded();
+    }
+
+    function applyFilters(previewElement, state) {
+        previewElement.style.filter = `brightness(${state.brightness}%) contrast(${state.clarity}%)`;
+    }
+
+    function redrawRotatedImage(side) {
+        const sourceData = originalImageData[side];
+        if (!sourceData) return;
+
+        const state = side === 'front' ? frontState : backState;
+        const previewElement = side === 'front' ? previewFront : previewBack;
+        const angle = state.rotate;
+
+        const image = new Image();
+        image.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const radians = angle * Math.PI / 180;
+            
+            if (angle % 180 !== 0) { 
+                canvas.width = image.height; 
+                canvas.height = image.width; 
+            } else { 
+                canvas.width = image.width; 
+                canvas.height = image.height; 
+            }
+
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate(radians);
+            ctx.drawImage(image, -image.width / 2, -image.height / 2);
+            
+            previewElement.src = canvas.toDataURL('image/png');
+        };
+        image.src = sourceData;
+    }
+    
+    function removeImage(side) {
+        loadedImages[side] = false;
+        originalImageData[side] = null;
+
+        const previewElement = (side === 'front') ? previewFront : previewBack;
+        const inputElement = (side === 'front') ? frontImageInput : backImageInput;
+        
+        inputElement.value = '';
+        previewElement.src = '';
+        previewElement.style.display = 'none';
+        
+        controls[side].panel.classList.remove('active');
+        controls[side].removeBtn.style.display = 'none';
+
+        if (side === 'front') {
+            removeImage('back');
+        }
+        
+        resetControls(side);
+        checkAllImagesLoaded();
+    }
+
+    function resetControls(side) {
+        const state = side === 'front' ? frontState : backState;
+        const sideControls = controls[side];
+        const preview = side === 'front' ? previewFront : previewBack;
+
+        Object.assign(state, defaultState);
+        
+        sideControls.brightness.value = defaultState.brightness;
+        sideControls.clarity.value = defaultState.clarity;
+        sideControls.brightnessVal.textContent = defaultState.brightness;
+        sideControls.clarityVal.textContent = defaultState.clarity;
+        
+        applyFilters(preview, state);
+        if (originalImageData[side]) {
+            redrawRotatedImage(side);
+        }
+    }
+
+    function checkAllImagesLoaded() {
+        const enabled = loadedImages.front;
+        downloadBtn.disabled = !enabled;
+        downloadBtn.innerHTML = enabled ? '📥 Download as PDF' : '📤 Upload Image to Continue';
+    }
+
+    function handleImageUpload(event, previewElement, side) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const image = new Image();
+            image.onload = function() {
+                EXIF.getData(image, function() {
+                    const orientation = EXIF.getTag(this, 'Orientation') || 1;
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const { width, height } = image;
+
+                    if (orientation > 4 && orientation < 9) { 
+                        canvas.width = height; 
+                        canvas.height = width; 
+                    } else { 
+                        canvas.width = width; 
+                        canvas.height = height; 
+                    }
+
+                    switch (orientation) {
+                        case 2: ctx.transform(-1, 0, 0, 1, width, 0); break;
+                        case 3: ctx.transform(-1, 0, 0, -1, width, height); break;
+                        case 4: ctx.transform(1, 0, 0, -1, 0, height); break;
+                        case 5: ctx.transform(0, 1, 1, 0, 0, 0); break;
+                        case 6: ctx.transform(0, 1, -1, 0, height, 0); break;
+                        case 7: ctx.transform(0, -1, -1, 0, height, width); break;
+                        case 8: ctx.transform(0, -1, 1, 0, 0, width); break;
+                    }
+                    ctx.drawImage(image, 0, 0);
+                    
+                    originalImageData[side] = canvas.toDataURL('image/png');
+                    
+                    previewElement.style.display = 'block';
+                    controls[side].removeBtn.style.display = 'block';
+                    
+                    if (side === 'front') {
+                        loadedImages.back = false;
+                        originalImageData.back = null;
+                        previewBack.src = '';
+                        previewBack.style.display = 'none';
+                        controls.back.panel.classList.remove('active');
+                        controls.back.removeBtn.style.display = 'none';
+                        resetControls('back');
+                    }
+
+                    resetControls(side);
+
+                    loadedImages[side] = true;
+                    
+                    // Add animation delay for smooth transition
+                    setTimeout(() => {
+                        controls[side].panel.classList.add('active');
+                    }, 100);
+                    
+                    checkAllImagesLoaded();
+                });
+            };
+            image.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function downloadAsPDF() {
+        const layout = document.getElementById('a4-layout');
+        const { jsPDF } = window.jspdf;
+        
+        // Add loading animation
+        downloadBtn.innerHTML = '<span class="loading-spinner"></span>Generating PDF...';
+        downloadBtn.disabled = true;
+
+        const originalTransform = layout.style.transform;
+        layout.style.transform = 'none'; 
+
+        html2canvas(layout, { scale: 3, useCORS: true, logging: false }).then(canvas => {
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
+            pdf.save('Document-Layout.pdf');
+            
+            layout.style.transform = originalTransform;
+
+            // Success animation
+            downloadBtn.innerHTML = '✅ PDF Downloaded!';
+            downloadBtn.classList.add('success-animation');
+            
+            setTimeout(() => {
+                downloadBtn.classList.remove('success-animation');
+                checkAllImagesLoaded();
+            }, 2000);
+        });
+    }
+
+    // --- Event Listeners ---
+    document.addEventListener('DOMContentLoaded', () => {
+        createBackgroundAnimation();
+        handleLayoutChange();
+    });
+    
+    layoutSelector.addEventListener('change', handleLayoutChange);
+    frontImageInput.addEventListener('change', (e) => handleImageUpload(e, previewFront, 'front'));
+    backImageInput.addEventListener('change', (e) => handleImageUpload(e, previewBack, 'back'));
+    downloadBtn.addEventListener('click', downloadAsPDF);
+
+    // Filter controls with smooth updates
+    controls.front.brightness.addEventListener('input', (e) => { 
+        frontState.brightness = e.target.value; 
+        controls.front.brightnessVal.textContent = e.target.value; 
+        applyFilters(previewFront, frontState); 
+    });
+    
+    controls.front.clarity.addEventListener('input', (e) => { 
+        frontState.clarity = e.target.value; 
+        controls.front.clarityVal.textContent = e.target.value; 
+        applyFilters(previewFront, frontState); 
+    });
+    
+    controls.back.brightness.addEventListener('input', (e) => { 
+        backState.brightness = e.target.value; 
+        controls.back.brightnessVal.textContent = e.target.value; 
+        applyFilters(previewBack, backState); 
+    });
+    
+    controls.back.clarity.addEventListener('input', (e) => { 
+        backState.clarity = e.target.value; 
+        controls.back.clarityVal.textContent = e.target.value; 
+        applyFilters(previewBack, backState); 
+    });
+
+    // Rotation controls with visual feedback
+    controls.front.rotateLeft.addEventListener('click', () => { 
+        frontState.rotate -= 90; 
+        redrawRotatedImage('front'); 
+        controls.front.rotateLeft.style.transform = 'scale(0.9)';
+        setTimeout(() => controls.front.rotateLeft.style.transform = '', 150);
+    });
+    
+    controls.front.rotateRight.addEventListener('click', () => { 
+        frontState.rotate += 90; 
+        redrawRotatedImage('front'); 
+        controls.front.rotateRight.style.transform = 'scale(0.9)';
+        setTimeout(() => controls.front.rotateRight.style.transform = '', 150);
+    });
+    
+    controls.back.rotateLeft.addEventListener('click', () => { 
+        backState.rotate -= 90; 
+        redrawRotatedImage('back'); 
+        controls.back.rotateLeft.style.transform = 'scale(0.9)';
+        setTimeout(() => controls.back.rotateLeft.style.transform = '', 150);
+    });
+    
+    controls.back.rotateRight.addEventListener('click', () => { 
+        backState.rotate += 90; 
+        redrawRotatedImage('back'); 
+        controls.back.rotateRight.style.transform = 'scale(0.9)';
+        setTimeout(() => controls.back.rotateRight.style.transform = '', 150);
+    });
+
+    // Reset and Remove controls
+    controls.front.reset.addEventListener('click', () => resetControls('front'));
+    controls.back.reset.addEventListener('click', () => resetControls('back'));
+    controls.front.removeBtn.addEventListener('click', () => removeImage('front'));
+    controls.back.removeBtn.addEventListener('click', () => removeImage('back'));
+</script>
+
+</body>
+</html>
